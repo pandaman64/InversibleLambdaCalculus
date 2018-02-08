@@ -143,4 +143,9 @@ let main argv =
     let hoge = Var (Unbound "hoge")
     reduce_and_inv (App (App (apply, id), hoge))
 
+    let zero = Lam (Lam (Var (Bound 0)))
+    let one = Lam (Lam (App (Var (Bound 1), Var (Bound 0))))
+    let succ = Lam (Lam (Lam (App (Var (Bound 1), App (App (Var (Bound 2), Var (Bound 1)), Var (Bound 0))))))
+    reduce_and_inv (App (succ, zero))
+
     0 // 整数の終了コードを返します
