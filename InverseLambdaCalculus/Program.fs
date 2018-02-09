@@ -70,6 +70,7 @@ type Transition =
     | AppRight of Transition
     | ApplySubst of SubstPos list * Term
     | ApplyNoSubst of Term
+    | Lambda of Transition
 with
     member this.AsString = 
         match this with
@@ -77,22 +78,30 @@ with
         | AppRight t -> sprintf "(_ %A)" t
         | ApplySubst (pos, t) -> sprintf "(\\.%A %A)" pos t
         | ApplyNoSubst t -> sprintf "(\\._ %A)" t
+        | Lambda t -> sprintf "\\.%A" t
 
-let rec beta (term: Term): Transition * Term =
-    match term with
-    | App (t, t') when not t.isValue ->
-        let tran, t = beta t
-        AppLeft tran, App (t, t')
-    | App (t, t') when not t'.isValue ->
-        let tran, t' = beta t'
-        AppRight tran, App (t, t')
-    | App (Lam t, v) ->
-        let pos, t = substitute 0 v t
-        (if List.isEmpty pos then
-            ApplyNoSubst v
-        else
-            ApplySubst (pos, v)), shift -1 0 t
-    | _ -> failwith "cannot perform beta reduction"
+let rec tryBeta (term: Term): (Transition * Term) option =
+    match term with 
+    | App (Lam t, v) when v.isValue ->
+        let pos, t = substitute 0 (shift 1 0 v) t
+        let tran = 
+            if List.isEmpty pos then
+                ApplyNoSubst v
+            else
+                ApplySubst (pos, v)
+        Some (tran, shift -1 0 t)
+    | App (t, t') ->
+        match tryBeta t with
+        | Some (tran, t) -> Some (AppLeft tran, App (t, t'))
+        | None ->
+            match tryBeta t' with
+            | Some (tran, t') -> Some (AppRight tran, App (t, t'))
+            | None -> None
+    | Lam t ->
+        match tryBeta t with
+        | Some (tran, t) -> Some (Lambda tran, Lam t)
+        | None -> None
+    | _ -> None
 
 let rec inv_beta (tran: Transition) (term: Term): Term = 
     let rec inv_subst pos i t =
@@ -121,16 +130,27 @@ let rec inv_beta (tran: Transition) (term: Term): Term =
         | _ -> failwith "invalid transition"
     | ApplySubst (pos, t) -> App (List.fold (fun term pos -> inv_subst pos 0 term) term pos |> Lam, t)
     | ApplyNoSubst t -> t
+    | Lambda tran ->
+        match term with
+        | Lam t -> Lam (inv_beta tran t)
+        | _ -> failwith "invalid transition"
 
 let reduce_and_inv (term: Term) =
     let mutable history = []
     let mutable term = term
     printfn "%A %A" history term
-    while not term.isValue do
-        let tran, t = beta term
-        history <- tran :: history
-        term <- t
-        printfn "%A %A" history term
+
+    let rec loop () =
+        match tryBeta term with
+        | Some (tran, t) ->
+            history <- tran :: history
+            term <- t
+            printfn "%A %A" history term
+            loop()
+        | None -> ()
+
+    loop ()
+
     while List.length history > 0 do
         term <- inv_beta history.Head term
         history <- history.Tail
