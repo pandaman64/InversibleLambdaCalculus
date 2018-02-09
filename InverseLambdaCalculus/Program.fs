@@ -69,7 +69,6 @@ type Transition =
     | AppLeft of Transition
     | AppRight of Transition
     | ApplySubst of SubstPos list * Term
-    | ApplyNoSubst of Term
     | Lambda of Transition
 with
     member this.AsString = 
@@ -77,19 +76,13 @@ with
         | AppLeft t -> sprintf "(%A _)" t
         | AppRight t -> sprintf "(_ %A)" t
         | ApplySubst (pos, t) -> sprintf "(\\.%A %A)" pos t
-        | ApplyNoSubst t -> sprintf "(\\._ %A)" t
         | Lambda t -> sprintf "\\.%A" t
 
 let rec tryBeta (term: Term): (Transition * Term) option =
     match term with 
     | App (Lam t, v) when v.isValue ->
         let pos, t = substitute 0 (shift 1 0 v) t
-        let tran = 
-            if List.isEmpty pos then
-                ApplyNoSubst v
-            else
-                ApplySubst (pos, v)
-        Some (tran, shift -1 0 t)
+        Some (ApplySubst (pos, v), shift -1 0 t)
     | App (t, t') ->
         match tryBeta t with
         | Some (tran, t) -> Some (AppLeft tran, App (t, t'))
@@ -129,7 +122,6 @@ let rec inv_beta (tran: Transition) (term: Term): Term =
         | App (t, t') -> App (t,inv_beta tran t')
         | _ -> failwith "invalid transition"
     | ApplySubst (pos, t) -> App (List.fold (fun term pos -> inv_subst pos 0 term) term pos |> Lam, t)
-    | ApplyNoSubst t -> App (Lam term, t)
     | Lambda tran ->
         match term with
         | Lam t -> Lam (inv_beta tran t)
@@ -162,6 +154,8 @@ let main argv =
     let id = Lam (Var (Bound 0))
     let hoge = Var (Unbound "hoge")
     reduce_and_inv (App (App (apply, id), hoge))
+
+    printfn ""
 
     let zero = Lam (Lam (Var (Bound 0)))
     let one = Lam (Lam (App (Var (Bound 1), Var (Bound 0))))
