@@ -103,7 +103,7 @@ let rec tryBeta (term: Term): (Transition * Term) option =
         | None -> None
     | _ -> None
 
-let rec inv_beta (tran: Transition) (term: Term): Term = 
+let rec inv_beta (tran: Transition) (term: Term): Term =
     let rec inv_subst pos i t =
         match pos with
         | Here -> Var (Bound i)
@@ -129,7 +129,7 @@ let rec inv_beta (tran: Transition) (term: Term): Term =
         | App (t, t') -> App (t,inv_beta tran t')
         | _ -> failwith "invalid transition"
     | ApplySubst (pos, t) -> App (List.fold (fun term pos -> inv_subst pos 0 term) term pos |> Lam, t)
-    | ApplyNoSubst t -> t
+    | ApplyNoSubst t -> App (Lam term, t)
     | Lambda tran ->
         match term with
         | Lam t -> Lam (inv_beta tran t)
